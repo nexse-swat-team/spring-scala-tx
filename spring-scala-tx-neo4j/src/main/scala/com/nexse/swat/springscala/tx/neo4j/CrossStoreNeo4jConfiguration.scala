@@ -1,32 +1,35 @@
 package com.nexse.swat.springscala.tx.neo4j
 
-import org.springframework.context.annotation.{Bean, Configuration}
+import org.springframework.context.annotation.{DependsOn, Bean}
 import javax.persistence.EntityManagerFactory
-import org.springframework.beans.factory.annotation.{Autowired, Qualifier}
-import beans.BeanProperty
 import com.nexse.swat.springscala.tx.core.ChainedTransactionManager
 import org.springframework.orm.jpa.JpaTransactionManager
-import org.neo4j.graphdb.GraphDatabaseService
 import org.neo4j.kernel.impl.transaction.{UserTransactionImpl, SpringTransactionManager}
 import org.springframework.transaction.jta.{UserTransactionAdapter, JtaTransactionManager}
-import org.neo4j.kernel.GraphDatabaseAPI
+import org.neo4j.kernel.{EmbeddedGraphDatabase, GraphDatabaseAPI}
 import javax.transaction.{Synchronization, Status, Transaction, TransactionManager}
 import javax.transaction.xa.XAResource
+import sys.ShutdownHookThread
 
-abstract class CrossStoreNeo4j {
-
-  def ds: GraphDatabaseService
-
-  @Qualifier("&entityManagerFactory")
-  @Autowired(required = false)
-  @BeanProperty
-  var entityManagerFactory: EntityManagerFactory = _
+abstract class CrossStoreNeo4jConfiguration {
 
   @Bean
-  def neo4jTransactionManager =
-    ChainedTransactionManager(new JpaTransactionManager(getEntityManagerFactory()), jtaTXManager)
+  def graphDB = {
+    val ds = new EmbeddedGraphDatabase("pippo")
+    ShutdownHookThread {
+      ds.shutdown
+    }
+    ds
+  }
 
-  private val jtaTXManager = ds match {
+  def emf: EntityManagerFactory
+
+  @Bean // TODO: fix for no entity manager factory
+  @DependsOn(Array("graphDB", "entityManagerFactory"))
+  def neo4jTransactionManager =
+    ChainedTransactionManager(new JpaTransactionManager(emf), jtaTXManager)
+
+  private def jtaTXManager = graphDB match {
     case gdapi: GraphDatabaseAPI => {
       val transactionManager = new SpringTransactionManager(gdapi)
       val userTransaction = new UserTransactionImpl(gdapi)
