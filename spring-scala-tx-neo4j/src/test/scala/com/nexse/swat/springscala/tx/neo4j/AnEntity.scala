@@ -1,7 +1,7 @@
 package com.nexse.swat.springscala.tx.neo4j
 
-import javax.persistence.{Id, Entity}
 import beans.BeanProperty
+import javax.persistence.{Id, Entity}
 
 @Entity
 class AnEntity {

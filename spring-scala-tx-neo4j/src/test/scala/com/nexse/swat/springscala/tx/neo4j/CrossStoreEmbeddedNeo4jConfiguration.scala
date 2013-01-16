@@ -1,11 +1,10 @@
 package com.nexse.swat.springscala.tx.neo4j
 
-import org.neo4j.kernel.EmbeddedGraphDatabase
+import com.atomikos.jdbc.nonxa.AtomikosNonXADataSourceBean
 import org.springframework.context.annotation.{Bean, Configuration}
-import org.springframework.transaction.annotation.EnableTransactionManagement
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter
-import com.atomikos.jdbc.nonxa.AtomikosNonXADataSourceBean
+import org.springframework.transaction.annotation.EnableTransactionManagement
 
 @Configuration
 @EnableTransactionManagement
@@ -32,4 +31,5 @@ class CrossStoreEmbeddedNeo4jConfiguration extends CrossStoreNeo4jConfiguration 
     dataSource.setUser("sa")
     dataSource
   }
+
 }
