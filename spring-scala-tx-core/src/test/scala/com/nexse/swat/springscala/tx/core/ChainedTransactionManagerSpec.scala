@@ -7,45 +7,42 @@ import org.springframework.transaction.support.DefaultTransactionDefinition
 
 class ChainedTransactionManagerSpec extends Specification {
 
-  private def setupTransactionManagers(transactionManagers: PlatformTransactionManager*) =
+  private def setupTMs(transactionManagers: PlatformTransactionManager*) =
     new ChainedTransactionManager(new TestSynchronizationManager(), transactionManagers: _*)
 
-  private def createAndCommitTransaction(tm: PlatformTransactionManager) {
+  private def createAndCommitTx(tm: PlatformTransactionManager) {
     tm.commit(tm.getTransaction(new DefaultTransactionDefinition()))
   }
 
-  private def createAndRollbackTransaction(tm: PlatformTransactionManager) {
+  private def createAndRollbackTx(tm: PlatformTransactionManager) {
     tm.rollback(tm.getTransaction(new DefaultTransactionDefinition()))
   }
 
   "Non failing TM" should {
 
     "complete successfully" in {
-      val transactionManager = createNonFailingTransactionManager("single")
-      createAndCommitTransaction(setupTransactionManagers(transactionManager))
-      transactionManager match {
-        case tptm: TestPlatformTransactionManager if (tptm.isCommitted) => success
+      val tm1 = createNonFailing("single")
+      createAndCommitTx(setupTMs(tm1))
+      tm1 match {
+        case f if (f.isCommitted) => success
         case _ => failure
       }
     }
 
     "commit all registered TM" in {
-      val first = createNonFailingTransactionManager("first")
-      val second = createNonFailingTransactionManager("second")
-      createAndCommitTransaction(setupTransactionManagers(first, second))
-      (first, second) match {
-        case (f: TestPlatformTransactionManager, s: TestPlatformTransactionManager)
-          if (f.isCommitted && s.isCommitted) => success
+      val (tm1, tm2) = (createNonFailing("first"), createNonFailing("second"))
+      createAndCommitTx(setupTMs(tm1, tm2))
+      (tm1, tm2) match {
+        case (f, s) if (f.isCommitted && s.isCommitted) => success
         case _ => failure
       }
     }
 
     "commit TMs in reverse order" in {
-      val first = createNonFailingTransactionManager("first")
-      val second = createNonFailingTransactionManager("second")
-      createAndCommitTransaction(setupTransactionManagers(first, second))
-      (first, second) match {
-        case (f: TestPlatformTransactionManager, s: TestPlatformTransactionManager) => (f.commitTime, s.commitTime) match {
+      val (tm1, tm2) = (createNonFailing("first"), createNonFailing("second"))
+      createAndCommitTx(setupTMs(tm1, tm2))
+      (tm1, tm2) match {
+        case (f, s) => (f.commitTime, s.commitTime) match {
           case (Some(fct), Some(sct)) if (fct >= sct) => success
           case _ => failure
         }
@@ -74,9 +71,9 @@ class ChainedTransactionManagerSpec extends Specification {
 
     "throw rolled back exception for single TM failure" in {
       val checker = checkHeuristicState(STATE_ROLLED_BACK) _
-      val tm = setupTransactionManagers(createFailingTransactionManager("single"))
+      val chainedTM = setupTMs(createFailing("single"))
       allCatch.either {
-        createAndCommitTransaction(tm)
+        createAndCommitTx(chainedTM)
       }.fold(
         fa => checker(fa),
         fb => {
@@ -88,12 +85,9 @@ class ChainedTransactionManagerSpec extends Specification {
 
     "throw mixed rolled back exception for non first TM failure" in {
       val checker = checkHeuristicState(STATE_MIXED) _
-      val tm = setupTransactionManagers(
-        createFailingTransactionManager("first"),
-        createNonFailingTransactionManager("second")
-      )
+      val chainedTM = setupTMs(createFailing("first"), createNonFailing("second"))
       allCatch.either {
-        createAndCommitTransaction(tm)
+        createAndCommitTx(chainedTM)
       }.fold(
         fa => checker(fa),
         fb => {
@@ -104,20 +98,18 @@ class ChainedTransactionManagerSpec extends Specification {
     }
 
     "rollback all TMs" in {
-      val first = createNonFailingTransactionManager("first")
-      val second = createNonFailingTransactionManager("second")
-      createAndRollbackTransaction(setupTransactionManagers(first, second))
-      (first, second) match {
-        case (f: TestPlatformTransactionManager, s: TestPlatformTransactionManager)
-          if (f.wasRolledBack && s.wasRolledBack) => success
+      val (tm1, tm2) = (createNonFailing("first"), createNonFailing("second"))
+      createAndRollbackTx(setupTMs(tm1, tm2))
+      (tm1, tm2) match {
+        case (f, s) if (f.wasRolledBack && s.wasRolledBack) => success
         case _ => failure
       }
     }
 
     "throw unexpected exception on failing rollback" in {
-      val ctm = setupTransactionManagers(createFailingTransactionManager("first"))
+      val chainedTM = setupTMs(createFailing("first"))
       allCatch.either {
-        createAndRollbackTransaction(ctm)
+        createAndRollbackTx(chainedTM)
       }.fold(
         fa => fa match {
           case e: UnexpectedRollbackException => success

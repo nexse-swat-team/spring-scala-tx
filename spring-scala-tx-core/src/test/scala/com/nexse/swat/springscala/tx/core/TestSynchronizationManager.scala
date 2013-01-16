@@ -2,7 +2,7 @@ package com.nexse.swat.springscala.tx.core
 
 class TestSynchronizationManager extends SynchronizationManager {
 
-  private var synchronizationActive: Boolean = _
+  private var synchronizationActive = false
 
   def initSynchronization() {
     synchronizationActive = true

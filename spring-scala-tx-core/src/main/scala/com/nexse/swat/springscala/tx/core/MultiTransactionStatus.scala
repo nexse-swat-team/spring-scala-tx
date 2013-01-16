@@ -1,22 +1,22 @@
 package com.nexse.swat.springscala.tx.core
 
 import org.springframework.transaction.{TransactionDefinition, PlatformTransactionManager, TransactionStatus}
-import collection.mutable
 
-case class MultiTransactionStatus(mainTransactionManager: PlatformTransactionManager) extends TransactionStatus {
+case class MultiTransactionStatus(newSync: Boolean,
+                                  definition: TransactionDefinition,
+                                  transactionManagers: PlatformTransactionManager*)
+  extends TransactionStatus {
 
-  private val transactionStatuses = new mutable.HashMap[PlatformTransactionManager, TransactionStatus]
-    with mutable.SynchronizedMap[PlatformTransactionManager, TransactionStatus]
+  private val transactionStatuses = {
+    val txStatuses = for {
+      transactionManager <- transactionManagers
+    } yield transactionManager -> transactionManager.getTransaction(definition)
 
-  private var newSynchonization: Boolean = _
-
-  def mainTransactionStatus = transactionStatuses(mainTransactionManager)
-
-  def setNewSynchonization() {
-    newSynchonization = true
+    txStatuses.toMap
   }
 
-  def isNewSynchonization() = newSynchonization
+  /** First TM is main TM */
+  val mainTransactionStatus = transactionStatuses(transactionManagers(0))
 
   def isNewTransaction() = mainTransactionStatus.isNewTransaction()
 
@@ -33,51 +33,38 @@ case class MultiTransactionStatus(mainTransactionManager: PlatformTransactionMan
   def isCompleted() = mainTransactionStatus.isCompleted()
 
   case class SavePoints() {
-    val savepoints = new mutable.HashMap[TransactionStatus, Object]
 
-    def addSavePoint(status: TransactionStatus, savepoint: Object) {
-      savepoints.put(status, savepoint)
-    }
-
-    def save(transactionStatus: TransactionStatus) {
-      val savepoint = transactionStatus.createSavepoint()
-      addSavePoint(transactionStatus, savepoint)
-    }
+    private val savePoints = for {
+      transactionStatus <- transactionStatuses.values
+    } yield transactionStatus -> transactionStatus.createSavepoint()
 
     def rollback() {
-      for (transactionStatus <- savepoints.keySet) {
-        transactionStatus.rollbackToSavepoint(savepointFor(transactionStatus))
+      savePoints foreach {
+        sp => sp._1.rollbackToSavepoint(sp._2)
       }
     }
 
-    def savepointFor(transactionStatus: TransactionStatus) = savepoints.get(transactionStatus)
-
     def release() {
-      for (transactionStatus <- savepoints.keySet) {
-        transactionStatus.releaseSavepoint(savepointFor(transactionStatus))
+      savePoints foreach {
+        sp => sp._1.releaseSavepoint(sp._2)
       }
     }
 
   }
 
-  def createSavepoint() = {
-    val savePoints = SavePoints()
-    for (transactionStatus <- transactionStatuses.values) {
-      savePoints.save(transactionStatus)
-    }
-    savePoints
+  def createSavepoint() = SavePoints()
+
+  private def maybeSavePoints(savepoint: AnyRef) = savepoint match {
+    case sp: SavePoints => Some(sp)
+    case _ => None
   }
 
   def rollbackToSavepoint(savepoint: Object) {
-    savepoint.asInstanceOf[SavePoints].rollback()
+    maybeSavePoints(savepoint) foreach (_.rollback())
   }
 
   def releaseSavepoint(savepoint: Object) {
-    savepoint.asInstanceOf[SavePoints].release()
-  }
-
-  def registerTransactionManager(definition: TransactionDefinition, transactionManager: PlatformTransactionManager) {
-    transactionStatuses.put(transactionManager, transactionManager.getTransaction(definition))
+    maybeSavePoints(savepoint) foreach (_.release())
   }
 
   def commit(transactionManager: PlatformTransactionManager) {

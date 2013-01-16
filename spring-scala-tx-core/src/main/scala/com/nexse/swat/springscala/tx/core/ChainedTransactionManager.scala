@@ -9,27 +9,26 @@ object ChainedTransactionManager {
   def apply(transactionManagers: PlatformTransactionManager*) =
     new ChainedTransactionManager(DefaultSynchronizationManager(), transactionManagers: _*)
 
-  def apply() = new ChainedTransactionManager(DefaultSynchronizationManager())
-
+  //def apply() = new ChainedTransactionManager(DefaultSynchronizationManager())
 }
 
-class ChainedTransactionManager(val synchronizationManager: SynchronizationManager,
-                                val transactionManagers: PlatformTransactionManager*)
+case class ChainedTransactionManager(synchronizationManager: SynchronizationManager,
+                                     transactionManagers: PlatformTransactionManager*)
   extends PlatformTransactionManager
   with Logging {
 
-  def getTransaction(definition: TransactionDefinition) = {
-    val mts = MultiTransactionStatus(transactionManagers(0) /*First TM is main TM*/)
+  private val reversedTM = transactionManagers.reverse
 
+  private val lastTM = reversedTM.head
+
+  def getTransaction(definition: TransactionDefinition) = MultiTransactionStatus(
     if (!synchronizationManager.isSynchronizationActive) {
       synchronizationManager.initSynchronization()
-      mts.setNewSynchonization()
-    }
-    for (transactionManager <- transactionManagers) {
-      mts.registerTransactionManager(definition, transactionManager)
-    }
-    mts
-  }
+      true
+    } else false,
+    definition,
+    transactionManagers: _*
+  )
 
   def commit(status: TransactionStatus) {
     val multiTransactionStatus = status.asInstanceOf[MultiTransactionStatus]
@@ -37,7 +36,7 @@ class ChainedTransactionManager(val synchronizationManager: SynchronizationManag
     var commitException: Exception = null
     var commitExceptionTransactionManager: PlatformTransactionManager = null
 
-    for (transactionManager <- transactionManagers.reverse) {
+    for (transactionManager <- reversedTM) {
       if (commit) {
         try {
           multiTransactionStatus.commit(transactionManager)
@@ -54,17 +53,17 @@ class ChainedTransactionManager(val synchronizationManager: SynchronizationManag
           multiTransactionStatus.rollback(transactionManager)
         } catch {
           case ex: Exception =>
-            logger.warn("Rollback exception (after commit) (" + transactionManager + ") " + ex.getMessage, ex)
+            logger.warn("Rollback exception (after commit) ($transactionManager): ${ex.getMessage}", ex)
         }
       }
     }
 
-    if (multiTransactionStatus.isNewSynchonization()) {
+    if (multiTransactionStatus.newSync) {
       synchronizationManager.clearSynchronization()
     }
 
     if (commitException != null) {
-      val transactionState = if (commitExceptionTransactionManager == getLastTransactionManager)
+      val transactionState = if (commitExceptionTransactionManager == lastTM)
         STATE_ROLLED_BACK
       else
         STATE_MIXED
@@ -78,7 +77,7 @@ class ChainedTransactionManager(val synchronizationManager: SynchronizationManag
     var rollbackException: Exception = null
     var rollbackExceptionTransactionManager: PlatformTransactionManager = null
 
-    for (transactionManager <- transactionManagers.reverse) {
+    for (transactionManager <- reversedTM) {
       try {
         multiTransactionStatus.rollback(transactionManager)
       } catch {
@@ -87,22 +86,22 @@ class ChainedTransactionManager(val synchronizationManager: SynchronizationManag
             rollbackException = ex
             rollbackExceptionTransactionManager = transactionManager
           } else {
-            logger.warn("Rollback exception (" + transactionManager + ") " + ex.getMessage, ex)
+            logger.warn(s"Rollback exception ($transactionManager): ${ex.getMessage}", ex)
           }
         }
       }
     }
 
-    if (multiTransactionStatus.isNewSynchonization()) {
+    if (multiTransactionStatus.newSync) {
       synchronizationManager.clearSynchronization()
     }
 
     if (rollbackException != null) {
-      throw new UnexpectedRollbackException("Rollback exception, originated at (" + rollbackExceptionTransactionManager + ") " +
-        rollbackException.getMessage, rollbackException)
+      throw new UnexpectedRollbackException(
+        s"Rollback exception, originated at ($rollbackExceptionTransactionManager): ${rollbackException.getMessage}",
+        rollbackException
+      )
     }
   }
-
-  def getLastTransactionManager = transactionManagers.last
 
 }

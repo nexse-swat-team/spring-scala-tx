@@ -4,7 +4,7 @@ import org.springframework.transaction.{TransactionDefinition, TransactionStatus
 
 object TestPlatformTransactionManager {
 
-  def createFailingTransactionManager(name: String) = new TestPlatformTransactionManager(name + "-failing") {
+  def createFailing(name: String) = new TestPlatformTransactionManager(name + "-failing") {
     override def commit(status: TransactionStatus) {
       throw new RuntimeException
     }
@@ -14,7 +14,7 @@ object TestPlatformTransactionManager {
     }
   }
 
-  def createNonFailingTransactionManager(name: String) = new TestPlatformTransactionManager(name + "-non-failing")
+  def createNonFailing(name: String) = new TestPlatformTransactionManager(name + "-non-failing")
 
 }
 

@@ -1,7 +1,5 @@
 package com.nexse.swat.springscala.tx.core
 
-import org.springframework.transaction.support.TransactionSynchronizationManager
-
 trait SynchronizationManager {
 
   def initSynchronization()
@@ -14,14 +12,17 @@ trait SynchronizationManager {
 
 case class DefaultSynchronizationManager() extends SynchronizationManager {
 
+  import org.springframework.transaction.support.{TransactionSynchronizationManager => TSM}
+  import TSM.{initSynchronization => init, isSynchronizationActive => isActive, clear}
+
   def initSynchronization() {
-    TransactionSynchronizationManager.initSynchronization()
+    init
   }
 
-  def isSynchronizationActive = TransactionSynchronizationManager.isSynchronizationActive()
+  def isSynchronizationActive = isActive
 
   def clearSynchronization() {
-    TransactionSynchronizationManager.clear()
+    clear
   }
 
 }
