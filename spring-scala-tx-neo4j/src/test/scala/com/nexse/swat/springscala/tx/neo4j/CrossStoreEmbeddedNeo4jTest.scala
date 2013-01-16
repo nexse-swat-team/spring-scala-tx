@@ -9,6 +9,7 @@ import javax.persistence.{EntityManager, PersistenceContext}
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.beans.factory.annotation.Autowired
 import org.neo4j.graphdb.GraphDatabaseService
+import org.springframework.test.annotation.Rollback
 
 @RunWith(classOf[SpringJUnit4ClassRunner])
 @ContextConfiguration(classes = Array(classOf[CrossStoreEmbeddedNeo4jConfiguration]))
@@ -22,6 +23,7 @@ class CrossStoreEmbeddedNeo4jTest {
 
   @Test
   @Transactional
+  @Rollback(false)
   def firstTest() {
     assertNotNull(em)
     assertNotNull(graphDB)

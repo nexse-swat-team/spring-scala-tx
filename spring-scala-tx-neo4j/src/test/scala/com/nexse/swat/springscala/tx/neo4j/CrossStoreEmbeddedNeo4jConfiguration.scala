@@ -17,7 +17,12 @@ class CrossStoreEmbeddedNeo4jConfiguration extends CrossStoreNeo4jConfiguration 
     val factoryBean = new LocalContainerEntityManagerFactoryBean()
     factoryBean.setDataSource(dataSource)
     factoryBean.setPackagesToScan("com.nexse.swat.springscala.tx.neo4j")
-    factoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter())
+    factoryBean.setJpaVendorAdapter {
+      val va = new HibernateJpaVendorAdapter()
+      va.setGenerateDdl(true)
+      va.setShowSql(true)
+      va
+    }
     factoryBean.setPersistenceUnitName("testPU")
     factoryBean
   }
