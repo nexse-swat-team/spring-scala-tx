@@ -15,10 +15,11 @@ class SpringServiceImpl extends AbstractTransactionManager {
   private var delegate: TransactionManager = _
 
   def init() {
-    if (transactionManager.isInstanceOf[JtaTransactionManager]) {
-      delegate = transactionManager.asInstanceOf[JtaTransactionManager].getTransactionManager()
-    } else {
-      throw new IllegalStateException("Injected transaction manager is not of type JtaTransactionManager but " + transactionManager.getClass().getName())
+    delegate = transactionManager match {
+      case jtaTM: JtaTransactionManager => jtaTM.getTransactionManager
+      case _ => throw new IllegalStateException(
+        s"Injected transaction manager is not of type JtaTransactionManager but ${transactionManager.getClass.getName}"
+      )
     }
   }
 
